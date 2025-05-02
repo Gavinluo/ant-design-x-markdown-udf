@@ -2,12 +2,12 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import reportWebVitals from './reportWebVitals';
-import CopilotDemo from './components/CopilotDemo';
+import ThoughtChainDemo from './components/ThoughtChainDemo';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <CopilotDemo />
+    <ThoughtChainDemo />
   </React.StrictMode>
 );
 
