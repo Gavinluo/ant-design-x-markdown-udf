@@ -3,11 +3,11 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import reportWebVitals from './reportWebVitals';
 import ThoughtChainDemo from './components/ThoughtChainDemo';
-
+import CopilotDemo from './components/CopilotDemo';
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <ThoughtChainDemo />
+    <CopilotDemo />
   </React.StrictMode>
 );
 

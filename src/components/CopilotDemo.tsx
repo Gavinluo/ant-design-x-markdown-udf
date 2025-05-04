@@ -1,17 +1,24 @@
 import {
     AppstoreAddOutlined,
+    CheckCircleOutlined,
     CloseOutlined,
     CloudUploadOutlined,
+    CoffeeOutlined,
     CommentOutlined,
     CopyOutlined,
     DislikeOutlined,
+    FireOutlined,
+    InfoCircleOutlined,
     LikeOutlined,
+    LoadingOutlined,
+    MoreOutlined,
     OpenAIFilled,
     PaperClipOutlined,
     PlusOutlined,
     ProductOutlined,
     ReloadOutlined,
     ScheduleOutlined,
+    SmileOutlined,
   } from '@ant-design/icons';
   import {
     Attachments,
@@ -19,9 +26,14 @@ import {
     Bubble,
     Conversations,
     Prompts,
+    PromptsProps,
     Sender,
     Suggestion,
+    ThoughtChain,
+    ThoughtChainItem,
+    ThoughtChainProps,
     Welcome,
+    XRequest,
     useXAgent,
     useXChat,
   } from '@ant-design/x';
@@ -29,8 +41,9 @@ import {
   import type { Conversation } from '@ant-design/x/es/conversations';
   import { Button, GetProp, GetRef, Image, Popover, Space, Spin, message } from 'antd';
   import { createStyles } from 'antd-style';
+import { log } from 'console';
   import dayjs from 'dayjs';
-  import React, { useEffect, useRef, useState } from 'react';
+  import React, { ReactElement, useEffect, useRef, useState } from 'react';
   
   const MOCK_SESSION_LIST = [
     {
@@ -151,6 +164,28 @@ import {
     setCopilotOpen: (open: boolean) => void;
   }
   
+  const getStatusIcon = (status: ThoughtChainItem['status']) => {
+    const iconMap: Record<NonNullable<ThoughtChainItem['status']>, ReactElement> = {
+      success: <CheckCircleOutlined />,
+      error: <InfoCircleOutlined />,
+      pending: <LoadingOutlined />,
+    };
+    return status ? iconMap[status] : undefined;
+  };
+  
+  const ActionButtons = ({ onConfirm, onReject, disabled = false }: { 
+    onConfirm: () => void; 
+    onReject: () => void;
+    disabled?: boolean;
+  }) => (
+    <Space direction="horizontal" style={{ width: "100%" }}>
+      <Button onClick={onConfirm} type="primary" disabled={disabled}>确认</Button>
+      <Button onClick={onReject} danger disabled={disabled}>拒绝</Button>
+    </Space>
+  );
+  
+  const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+  
   const Copilot = (props: CopilotProps) => {
     const { copilotOpen, setCopilotOpen } = props;
     const { styles } = useCopilotStyle();
@@ -169,14 +204,53 @@ import {
   
     const [inputValue, setInputValue] = useState('');
   
+    const [chainItem, setChainItem] = useState<ThoughtChainItem>({
+      key: 'think',
+      title: "思考",
+      description: '思考中...',
+      extra: <Button type="text" icon={<MoreOutlined />} />,
+      status: "pending" as const,
+      icon: <LoadingOutlined/>,
+      content: '思考中...'
+    });
+    const [expandedKeys, setExpandedKeys] = useState<string[]>(['think']);
+    const currentContentRef = useRef<string>('');
+  
     // ==================== Runtime ====================
     const [agent] = useXAgent<BubbleDataType>({
-      baseURL: 'https://api.siliconflow.cn/v1/chat/completions',
+      baseURL: 'http://localhost:5002/v1/chat/completions',
       model: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B',
       dangerouslyApiKey: 'Bearer sk-ravoadhrquyrkvaqsgyeufqdgphwxfheifujmaoscudjgldr',
     });
     const loading = agent.isRequesting();
-  
+    
+    const updateChainItem = async (status: ThoughtChainItem['status']) => {
+      if (status === "success") {
+        setChainItem(prev => ({
+          ...prev,
+          status: "success" as const,
+          content: "正在执行",
+          icon: getStatusIcon("success"),
+          footer: <ActionButtons onConfirm={() => {}} onReject={() => {}} disabled />
+        }));
+        
+        await delay(1000);
+        
+        setChainItem(prev => ({
+          ...prev,
+          content: "执行成功"
+        }));
+      } else {
+        setChainItem(prev => ({
+          ...prev,
+          status: "error" as const,
+          content: "用户拒绝",
+          icon: getStatusIcon("error"),
+          footer: <ActionButtons onConfirm={() => {}} onReject={() => {}} disabled />
+        }));
+      }
+    };
+
     const { messages, onRequest, setMessages } = useXChat({
       agent,
       requestFallback: (_, { error }) => {
@@ -194,18 +268,54 @@ import {
       transformMessage: (info) => {
         const { originMessage, chunk } = info || {};
         let currentText = '';
+        let startTime = Date.now();
+        
         try {
           if (chunk?.data && !chunk?.data.includes('DONE')) {
             const message = JSON.parse(chunk?.data);
-            currentText = !message?.choices?.[0].delta?.reasoning_content
-              ? ''
-              : message?.choices?.[0].delta?.reasoning_content;
+            currentText = message?.choices?.[0].delta?.content;
+            currentContentRef.current += currentText;
+            chainItem.content = currentContentRef.current;
+            setChainItem(prev => ({
+              ...prev,
+              content: currentContentRef.current
+            }));
+          } else if (chunk?.data?.includes('DONE')) {
+            const endTime = Date.now();
+            const thinkTime = Math.round((endTime - startTime) / 1000);
+            setChainItem(prev => ({
+              ...prev,
+              status: "success" as const,
+              description: `思考完成，用时${thinkTime}秒`,
+              icon: getStatusIcon("success"),
+              content: currentContentRef.current,
+              footer: <ActionButtons 
+                onConfirm={() => updateChainItem('success')} 
+                onReject={() => updateChainItem('error')} 
+              />
+            }));
+            chainItem.status = "success";
+            chainItem.description = `思考完成，用时${thinkTime}秒`;
+            chainItem.icon= getStatusIcon("success");
+            chainItem.footer = <ActionButtons 
+            onConfirm={() => updateChainItem('success')} 
+            onReject={() => updateChainItem('error')} 
+          />;
+            // 重置内容
+            currentContentRef.current = '';
           }
         } catch (error) {
           console.error(error);
         }
+
         return {
-          content: (originMessage?.content || '') + currentText,
+          content: <ThoughtChain 
+            items={[chainItem]} 
+            collapsible={{
+              expandedKeys,
+              onExpand: setExpandedKeys
+            }}
+          />,
           role: 'assistant',
         };
       },
@@ -220,7 +330,7 @@ import {
         stream: true,
         message: { content: val, role: 'user' },
       });
-  
+      
       // session title mock
       if (sessionList.find((i) => i.key === curSession)?.label === 'New session') {
         setSessionList(
@@ -310,7 +420,7 @@ import {
               classNames: {
                 content: i.status === 'loading' ? styles.loadingMessage : '',
               },
-              typing: i.status === 'loading' ? { step: 5, interval: 20, suffix: <>💗</> } : false,
+              typing: i.status === 'loading' ? { step: 5, interval: 20, suffix: <>Gavin</> } : false,
             }))}
             roles={{
               assistant: {
@@ -457,7 +567,7 @@ import {
     }, [messages]);
   
     return (
-      <div className={styles.copilotChat} style={{ width: copilotOpen ? 400 : 0 }}>
+      <div className={styles.copilotChat} style={{ width: copilotOpen ? 750 : 0 }}>
         {/** 对话区 - header */}
         {chatHeader}
   
@@ -473,7 +583,6 @@ import {
   const useWorkareaStyle = createStyles(({ token, css }) => {
     return {
       copilotWrapper: css`
-        min-width: 1000px;
         height: 100vh;
         display: flex;
       `,
@@ -545,73 +654,7 @@ import {
     // ==================== Render =================
     return (
       <div className={workareaStyles.copilotWrapper}>
-        {/** 左侧工作区 */}
-        <div className={workareaStyles.workarea}>
-          <div className={workareaStyles.workareaHeader}>
-            <div className={workareaStyles.headerTitle}>
-              <img
-                src="https://mdn.alipayobjects.com/huamei_iwk9zp/afts/img/A*eco6RrQhxbMAAAAAAAAAAAAADgCCAQ/original"
-                draggable={false}
-                alt="logo"
-                width={20}
-                height={20}
-              />
-              Ant Design X
-            </div>
-            {!copilotOpen && (
-              <div onClick={() => setCopilotOpen(true)} className={workareaStyles.headerButton}>
-                ✨ AI Copilot
-              </div>
-            )}
-          </div>
-  
-          <div
-            className={workareaStyles.workareaBody}
-            style={{ margin: copilotOpen ? 16 : '16px 48px' }}
-          >
-            <div className={workareaStyles.bodyContent}>
-              <Image
-                src="https://mdn.alipayobjects.com/huamei_iwk9zp/afts/img/A*48RLR41kwHIAAAAAAAAAAAAADgCCAQ/fmt.webp"
-                preview={false}
-              />
-              <div className={workareaStyles.bodyText}>
-                <h4>What is the RICH design paradigm?</h4>
-                <div>
-                  RICH is an AI interface design paradigm we propose, similar to how the WIMP paradigm
-                  relates to graphical user interfaces.
-                </div>
-                <br />
-                <div>
-                  The ACM SIGCHI 2005 (the premier conference on human-computer interaction) defined
-                  that the core issues of human-computer interaction can be divided into three levels:
-                </div>
-                <ul>
-                  <li>
-                    Interface Paradigm Layer: Defines the design elements of human-computer
-                    interaction interfaces, guiding designers to focus on core issues.
-                  </li>
-                  <li>
-                    User model layer: Build an interface experience evaluation model to measure the
-                    quality of the interface experience.
-                  </li>
-                  <li>
-                    Software framework layer: The underlying support algorithms and data structures
-                    for human-computer interfaces, which are the contents hidden behind the front-end
-                    interface.
-                  </li>
-                </ul>
-                <div>
-                  The interface paradigm is the aspect that designers need to focus on and define the
-                  most when a new human-computer interaction technology is born. The interface
-                  paradigm defines the design elements that designers should pay attention to, and
-                  based on this, it is possible to determine what constitutes good design and how to
-                  achieve it.
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-  
+        
         {/** 右侧对话区 */}
         <Copilot copilotOpen={copilotOpen} setCopilotOpen={setCopilotOpen} />
       </div>

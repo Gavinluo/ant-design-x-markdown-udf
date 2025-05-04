@@ -1,21 +1,9 @@
 import React, { useState, ReactElement } from "react";
 import { ThoughtChain } from "@ant-design/x";
-import type { ThoughtChainProps, ThoughtChainItem } from "@ant-design/x";
+import type { ThoughtChainItem } from "@ant-design/x";
 import { CheckCircleOutlined, InfoCircleOutlined, LoadingOutlined, MoreOutlined } from "@ant-design/icons";
-import { Card, Typography, Button, Space } from "antd";
+import { Card, Button, Space } from "antd";
 import '@ant-design/v5-patch-for-react-19';
-
-const { Text } = Typography;
-
-const getStatusIcon = (status: ThoughtChainItem['status']) => {
-  const iconMap: Record<NonNullable<ThoughtChainItem['status']>, ReactElement> = {
-    success: <CheckCircleOutlined />,
-    error: <InfoCircleOutlined />,
-    pending: <LoadingOutlined />,
-  };
-  return status ? iconMap[status] : undefined;
-};
-
 const ActionButtons = ({ onConfirm, onReject, disabled = false }: { 
   onConfirm: () => void; 
   onReject: () => void;
@@ -27,7 +15,26 @@ const ActionButtons = ({ onConfirm, onReject, disabled = false }: {
   </Space>
 );
 
-const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+function getStatusIcon(status: ThoughtChainItem['status']) {
+  switch (status) {
+    case 'success':
+      return <CheckCircleOutlined />;
+    case 'error':
+      return <InfoCircleOutlined />;
+    case 'pending':
+      return <LoadingOutlined />;
+    default:
+      return undefined;
+  }
+}
+const delay = (ms: number) => {
+  return new Promise<void>((resolve) => {
+    const timer: NodeJS.Timeout = setTimeout(() => {
+      clearTimeout(timer);
+      resolve();
+    }, ms);
+  });
+};
 
 const ThoughtChainDemo = () => {
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);

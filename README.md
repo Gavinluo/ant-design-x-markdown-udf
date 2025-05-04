@@ -1,3 +1,11 @@
+# Dome 
+ant-design-x, ant-style, typeScript,
+//将思维链加入到AI的展示内容里，作为默认回复样式  ok
+// 打字机展示think 标签，自行解析标签，参考后端？
+//参考XStream 流，动态更新 思维链内容
+//参考XRequest 自定义后端请求参数
+//参考XRequest Mock 所有相关请求内容，后端无业务，数据的相关操作都放前端
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
