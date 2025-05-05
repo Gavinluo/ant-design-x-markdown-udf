@@ -1,3 +1,10 @@
+/**
+ * @license MIT
+ * Copyright (c) 2024
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 import React, { useState, ReactElement } from "react";
 import { Bubble, Sender, ThoughtChain, useXAgent, useXChat } from "@ant-design/x";
 import type { ThoughtChainItem } from "@ant-design/x";

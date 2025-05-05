@@ -1,11 +1,12 @@
 # 本Demo 是想通过Ant-Design-X 创建一个基于AI的交互助手，包括思考过程，MCP交互过程。下面是计划要做的内容
 
-// 将思维链加入到AI的展示内容里，作为默认回复样式  
-// 打字机展示think 标签，自行解析标签，参考后端？
-// 参考XStream 流，动态更新 思维链内容
-// 参考XRequest 自定义后端请求参数
-// 参考XRequest Mock 所有相关请求内容，后端无业务，数据的相关操作都放前端
-
+- 将思维链加入到AI的展示内容里，作为默认回复样式  
+- 打字机展示think 标签，自行解析标签
+- 参考XStream 流，动态更新 思维链内容
+- 参考XRequest 自定义后端请求参数
+- 参考XRequest Mock 所有相关请求内容，后端无业务，数据的相关操作都放前端
+- 使用markdown 展示代码块，并给代码块创建操作按钮
+- 增加 ReAction模式 和 Ask 模式
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
