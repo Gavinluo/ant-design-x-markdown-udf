@@ -204,7 +204,7 @@ import { log } from 'console';
   
     const [inputValue, setInputValue] = useState('');
   
-    const [chainItem, setChainItem] = useState<ThoughtChainItem>({
+    const [chainItems, setChainItems] = useState<ThoughtChainItem[]>([{
       key: 'think',
       title: "思考",
       description: '思考中...',
@@ -212,10 +212,11 @@ import { log } from 'console';
       status: "pending" as const,
       icon: <LoadingOutlined/>,
       content: '思考中...'
-    });
+    }]);
     const [expandedKeys, setExpandedKeys] = useState<string[]>(['think']);
-    const currentContentRef = useRef<string>('');
-  
+    let currentContentRef = '';
+    let startDate = Date.now();
+    let currentItemIndex = 0;
     // ==================== Runtime ====================
     const [agent] = useXAgent<BubbleDataType>({
       baseURL: 'http://localhost:5002/v1/chat/completions',
@@ -224,30 +225,36 @@ import { log } from 'console';
     });
     const loading = agent.isRequesting();
     
-    const updateChainItem = async (status: ThoughtChainItem['status']) => {
+    const updateChainItem = async (itemKey: number,status: ThoughtChainItem['status']) => {
+      const updateItem = (content: string) => ({
+        ...chainItems[itemKey],
+        content,
+        status,
+        icon: getStatusIcon(status),
+      });
+  
       if (status === "success") {
-        setChainItem(prev => ({
-          ...prev,
-          status: "success" as const,
-          content: "正在执行",
-          icon: getStatusIcon("success"),
-          footer: <ActionButtons onConfirm={() => {}} onReject={() => {}} disabled />
-        }));
+        setChainItems(prev => {
+          const newItems = [...prev];
+          newItems[itemKey] = updateItem("正在执行");
+          return newItems;
+        });
+        
         
         await delay(1000);
-        
-        setChainItem(prev => ({
-          ...prev,
-          content: "执行成功"
-        }));
+        setChainItems(prev => {
+          const newItems = [...prev];
+          newItems[itemKey] = updateItem("执行成功");
+          return newItems;
+        });
       } else {
-        setChainItem(prev => ({
-          ...prev,
-          status: "error" as const,
-          content: "用户拒绝",
-          icon: getStatusIcon("error"),
-          footer: <ActionButtons onConfirm={() => {}} onReject={() => {}} disabled />
-        }));
+        
+        setChainItems(prev => {
+          const newItems = [...prev];
+          newItems[itemKey] = updateItem("用户拒绝");
+          newItems[itemKey].footer =  <ActionButtons onConfirm={() => {}} onReject={() => {}} disabled />;
+          return newItems;
+        });
       }
     };
 
@@ -268,49 +275,86 @@ import { log } from 'console';
       transformMessage: (info) => {
         const { originMessage, chunk } = info || {};
         let currentText = '';
-        let startTime = Date.now();
-        
+        if(chunk?.data.includes("<think>")){
+          startDate = Date.now();
+          // 重置内容
+          currentContentRef = '';
+          currentItemIndex = 0;
+        }
+        if(chunk?.data.includes("</think>")){
+          //思考完成，请求调用工具
+          currentItemIndex++;
+          const endTime = Date.now();
+          const thinkTime = Math.round((endTime - startDate) / 1000);
+          setChainItems(prev => {
+            const newItems = [...prev];
+            newItems[0].status= "success";
+            newItems[0].description= `思考完成，用时${thinkTime}秒`;
+            newItems[0].icon= getStatusIcon("success");
+            console.log("思考完成"+currentContentRef);
+            newItems[0].content= currentContentRef;
+            newItems.push({
+              key: `${currentItemIndex}`,
+              title: "请求调用工具",
+              description: "",
+              icon: getStatusIcon('pending'),
+              extra: <Button type="text" icon={<MoreOutlined />} />,
+              status: "pending",
+              content: ""
+            })
+            currentContentRef = '';
+            return newItems;
+          });
+          
+        }
         try {
           if (chunk?.data && !chunk?.data.includes('DONE')) {
             const message = JSON.parse(chunk?.data);
             currentText = message?.choices?.[0].delta?.content;
-            currentContentRef.current += currentText;
-            chainItem.content = currentContentRef.current;
-            setChainItem(prev => ({
-              ...prev,
-              content: currentContentRef.current
-            }));
+            currentContentRef += currentText;
+            if (currentItemIndex===0){
+            setChainItems(prev => {
+              const newItems = [...prev];
+              const endTime = Date.now();
+              const thinkTime = Math.round((endTime - startDate) / 1000);
+              newItems[0].content = currentContentRef;
+              newItems[0].description = `思考中...耗时${thinkTime}秒`;
+              return newItems;
+            });
+          }
           } else if (chunk?.data?.includes('DONE')) {
-            const endTime = Date.now();
-            const thinkTime = Math.round((endTime - startTime) / 1000);
-            setChainItem(prev => ({
-              ...prev,
-              status: "success" as const,
-              description: `思考完成，用时${thinkTime}秒`,
-              icon: getStatusIcon("success"),
-              content: currentContentRef.current,
-              footer: <ActionButtons 
-                onConfirm={() => updateChainItem('success')} 
-                onReject={() => updateChainItem('error')} 
-              />
-            }));
-            chainItem.status = "success";
-            chainItem.description = `思考完成，用时${thinkTime}秒`;
-            chainItem.icon= getStatusIcon("success");
-            chainItem.footer = <ActionButtons 
-            onConfirm={() => updateChainItem('success')} 
-            onReject={() => updateChainItem('error')} 
-          />;
-            // 重置内容
-            currentContentRef.current = '';
+            // 1. 解析 currentContentRef.current
+            const content = currentContentRef;
+            const result: Record<string, string> = {};
+            // 匹配所有 <xxx>yyy</xxx>
+            const regex = /<(\w+)>(.*?)<\/\1>/g;
+            let match;
+            while ((match = regex.exec(content)) !== null) {
+              // 排除最外层的 mcptool
+              if (match[1] !== 'mcptool') {
+                result[match[1]] = match[2];
+              }
+            }
+
+            // 2. 转成字符串（这里用 JSON 字符串）
+            const descriptionStr = JSON.stringify(result, null, 2);
+
+            // 3. 更新 newItems
+            setChainItems((prevItems) => {
+              const newItems = [...prevItems];
+              if (newItems[currentItemIndex]) {
+                newItems[currentItemIndex].description = descriptionStr;
+              }
+              return newItems;
+            });
           }
         } catch (error) {
           console.error(error);
         }
-
+        delay(1000);
         return {
           content: <ThoughtChain 
-            items={[chainItem]} 
+            items={chainItems} 
             collapsible={{
               expandedKeys,
               onExpand: setExpandedKeys
